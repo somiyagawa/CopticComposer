@@ -1,0 +1,938 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rem-en-khemi: Professional Coptic Composition Assistant</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Noto Sans Coptic Font -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Coptic&display=swap" rel="stylesheet">
+    
+    <!-- React, ReactDOM, and Babel -->
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <style>
+        .font-coptic {
+            font-family: 'Noto Sans Coptic', sans-serif;
+        }
+        
+        /* Custom scrollbar for better aesthetics */
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: #f1f5f9;
+            border-radius: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+        
+        /* Animation for loading states */
+        @keyframes pulse-subtle {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+        .pulse-loading {
+            animation: pulse-subtle 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useEffect, useMemo, useRef, useState, useCallback, useReducer } = React;
+
+        // Extended demo lexicon with more scholarly entries
+        const DEMO_LEXICON = [
+          {
+            id: "lex-0001",
+            head: "ⲛⲟⲩ",
+            pos: "DET",
+            gloss: "a, an (indefinite article)",
+            dialects: ["S", "B"],
+            refs: { source: "Crum", locus: "243b" },
+            variants: ["ⲛⲟⲩ", "ⲛⲟⲩ-"],
+            etymology: "< Egyptian nw",
+            examples: [
+              { coptic: "ⲛⲟⲩ ⲣⲱⲙⲉ", en: "a man" },
+              { coptic: "ⲛⲟⲩ ⲃⲱⲕ", en: "a book" },
+            ],
+          },
+          {
+            id: "lex-0002",
+            head: "ⲣⲱⲙⲉ",
+            pos: "N",
+            gloss: "person, man, human being",
+            dialects: ["S", "A", "L"],
+            refs: { source: "Crum", locus: "301a" },
+            variants: ["ⲣⲱⲙⲉ", "ⲣⲱⲙⲓ", "ⲣⲟⲙⲉ"],
+            etymology: "< Egyptian rmṯ",
+            examples: [
+              { coptic: "ⲡⲉ ⲣⲱⲙⲉ ⲛⲁⲛ", en: "the person is with us" },
+              { coptic: "ⲛⲓⲣⲱⲙⲉ ⲧⲏⲣⲟⲩ", en: "all people" },
+            ],
+          },
+          {
+            id: "lex-0003",
+            head: "ⲥⲟⲟⲩⲛ",
+            pos: "V",
+            gloss: "to know, understand, be acquainted with",
+            dialects: ["S", "B"],
+            refs: { source: "Crum", locus: "327a" },
+            variants: ["ⲥⲟⲟⲩⲛ", "ⲥⲟⲛ-", "ⲥⲉⲛ-"],
+            etymology: "< Egyptian swn",
+            examples: [
+              { coptic: "ⲁⲓ ⲥⲟⲟⲩⲛ ⲙ̄ⲙⲟⲓ", en: "I knew it" },
+              { coptic: "ϯⲥⲟⲟⲩⲛ ⲙ̄ⲙⲟⲕ", en: "I know you" },
+            ],
+          },
+          {
+            id: "lex-0004",
+            head: "ⲛⲟⲩⲧⲉ",
+            pos: "N",
+            gloss: "god, deity",
+            dialects: ["S", "B", "F"],
+            refs: { source: "Crum", locus: "244a" },
+            variants: ["ⲛⲟⲩⲧⲉ", "ⲛⲟⲩϯ"],
+            etymology: "< Egyptian nṯr",
+            examples: [
+              { coptic: "ⲡⲛⲟⲩⲧⲉ", en: "God (monotheistic)" },
+              { coptic: "ⲛⲉⲛⲛⲟⲩⲧⲉ", en: "the gods" },
+            ],
+          },
+          {
+            id: "lex-0005",
+            head: "ϩⲱⲃ",
+            pos: "N",
+            gloss: "thing, matter, work, deed",
+            dialects: ["S", "B"],
+            refs: { source: "Crum", locus: "680b" },
+            variants: ["ϩⲱⲃ", "ϩⲃⲏⲩⲉ"],
+            etymology: "< Egyptian ḥwt",
+            examples: [
+              { coptic: "ⲛⲓϩⲱⲃ ⲛⲓⲙ", en: "everything" },
+              { coptic: "ⲣ̄ ϩⲱⲃ", en: "to work" },
+            ],
+          },
+        ];
+
+        // Enhanced Coptic keyboard with more characters and diacritics
+        const COPTIC_KEYBOARD = {
+          main: ["ⲁ", "ⲃ", "ⲅ", "ⲇ", "ⲉ", "ⲍ", "ⲏ", "ⲑ", "ⲓ", "ⲕ", "ⲗ", "ⲙ", "ⲛ", "ⲝ", "ⲟ", "ⲡ", "ⲣ", "ⲥ", "ⲧ", "ⲩ", "ⲫ", "ⲭ", "ⲯ", "ⲱ"],
+          additional: ["ϣ", "ϥ", "ϯ", "ϩ", "ϫ", "ϭ", "ϧ", "ⳉ"],
+          diacritics: ["̄", "̈", "̇", "̀", "́", "̂", "̌"],
+          punctuation: ["·", "⳾", "⳿", ":", ";"],
+        };
+
+        // Utility functions
+        const debounce = (fn, ms) => {
+          let timer;
+          return (...args) => {
+            clearTimeout(timer);
+            timer = setTimeout(() => fn(...args), ms);
+          };
+        };
+
+        // Text statistics calculator
+        const calculateStats = (text) => {
+          const words = text.trim().split(/\s+/).filter(Boolean);
+          const chars = text.replace(/\s/g, '').length;
+          const lines = text.split('\n').length;
+          return { words: words.length, chars, lines };
+        };
+
+        // History management for undo/redo
+        const historyReducer = (state, action) => {
+          switch (action.type) {
+            case 'ADD':
+              const newHistory = [...state.history.slice(0, state.index + 1), action.text];
+              return {
+                history: newHistory.slice(-50), // Keep last 50 states
+                index: newHistory.length - 1
+              };
+            case 'UNDO':
+              if (state.index > 0) {
+                return { ...state, index: state.index - 1 };
+              }
+              return state;
+            case 'REDO':
+              if (state.index < state.history.length - 1) {
+                return { ...state, index: state.index + 1 };
+              }
+              return state;
+            default:
+              return state;
+          }
+        };
+
+        // Enhanced dictionary search hook
+        const useLexiconSearch = (dialectFilter, posFilter) => {
+          const [query, setQuery] = useState("");
+          const [results, setResults] = useState([]);
+          const [loading, setLoading] = useState(false);
+
+          const doSearch = useMemo(
+            () =>
+              debounce(async (q) => {
+                if (!q) {
+                  setResults([]);
+                  return;
+                }
+                
+                setLoading(true);
+                // Simulate async search
+                await new Promise(resolve => setTimeout(resolve, 100));
+                
+                const qn = q.trim().toLowerCase();
+                const filtered = DEMO_LEXICON.filter((entry) => {
+                  const matchesQuery = entry.head.toLowerCase().includes(qn) || 
+                    entry.variants.some((v) => v.toLowerCase().includes(qn)) ||
+                    entry.gloss.toLowerCase().includes(qn);
+                  const matchesDialect = !dialectFilter || entry.dialects.includes(dialectFilter);
+                  const matchesPos = !posFilter || entry.pos === posFilter;
+                  return matchesQuery && matchesDialect && matchesPos;
+                });
+                
+                setResults(filtered);
+                setLoading(false);
+              }, 300),
+            [dialectFilter, posFilter]
+          );
+
+          useEffect(() => {
+            doSearch(query);
+          }, [query, doSearch]);
+
+          return { query, setQuery, results, loading };
+        };
+
+        // Enhanced API configuration component
+        const ApiConfig = ({ apiKey, setApiKey, isVisible, setIsVisible }) => (
+          <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-sm font-semibold text-amber-900">API Configuration</h3>
+              <button
+                onClick={() => setIsVisible(!isVisible)}
+                className="text-xs px-2 py-1 rounded bg-amber-100 hover:bg-amber-200 text-amber-700"
+              >
+                {isVisible ? 'Hide' : 'Show'} Key
+              </button>
+            </div>
+            <input
+              type={isVisible ? "text" : "password"}
+              value={apiKey}
+              onChange={(e) => setApiKey(e.target.value)}
+              placeholder="Enter your Gemini API key..."
+              className="w-full px-3 py-2 text-sm rounded border border-amber-300 focus:outline-none focus:ring-2 focus:ring-amber-500"
+            />
+            <p className="text-xs text-amber-700 mt-1">
+              ⚠️ In production, API keys should be handled server-side for security.
+            </p>
+          </div>
+        );
+
+        // Enhanced Gemini API integration
+        async function callGeminiApi({ instruction, apiKey }) {
+          if (!apiKey) {
+            throw new Error("API key is required. Please configure your Gemini API key.");
+          }
+
+          const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+          
+          const payload = {
+            contents: [{ parts: [{ text: instruction }] }],
+            generationConfig: {
+              temperature: 0.7,
+              maxOutputTokens: 2048,
+            }
+          };
+
+          const response = await fetch(apiUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+
+          if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.error?.message || `API request failed: ${response.status}`);
+          }
+
+          const result = await response.json();
+          const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
+          
+          if (!text) {
+            throw new Error("No response generated");
+          }
+          
+          return { answer: text };
+        }
+
+        // Enhanced dictionary card component
+        const LexCard = ({ entry, onInsert, expanded, onToggle }) => (
+          <div className="border border-slate-200 rounded-lg p-3 mb-2 bg-white hover:shadow-md transition-shadow">
+            <div className="flex items-start justify-between">
+              <div className="flex-1">
+                <div className="flex items-baseline gap-2">
+                  <h4 className="font-bold text-lg font-coptic text-slate-900">{entry.head}</h4>
+                  <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">{entry.pos}</span>
+                </div>
+                <p className="text-sm text-slate-700 mt-1">{entry.gloss}</p>
+                
+                {expanded && (
+                  <div className="mt-3 space-y-2 text-sm">
+                    {entry.etymology && (
+                      <div className="flex gap-2">
+                        <span className="text-slate-500">Etymology:</span>
+                        <span className="text-slate-700">{entry.etymology}</span>
+                      </div>
+                    )}
+                    {entry.dialects && (
+                      <div className="flex gap-2">
+                        <span className="text-slate-500">Dialects:</span>
+                        <span className="text-slate-700">{entry.dialects.join(", ")}</span>
+                      </div>
+                    )}
+                    {entry.variants?.length > 0 && (
+                      <div className="flex gap-2">
+                        <span className="text-slate-500">Variants:</span>
+                        <span className="font-coptic text-slate-700">{entry.variants.join(" · ")}</span>
+                      </div>
+                    )}
+                    {entry.refs && (
+                      <div className="flex gap-2">
+                        <span className="text-slate-500">Reference:</span>
+                        <span className="text-slate-700">{entry.refs.source} {entry.refs.locus}</span>
+                      </div>
+                    )}
+                    {entry.examples?.length > 0 && (
+                      <div className="mt-2">
+                        <span className="text-slate-500">Examples:</span>
+                        {entry.examples.map((ex, i) => (
+                          <div key={i} className="mt-1 pl-4">
+                            <span className="font-coptic text-slate-900">{ex.coptic}</span>
+                            <span className="text-slate-600"> — {ex.en}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+              
+              <div className="flex flex-col gap-1 ml-2">
+                <button
+                  onClick={() => onToggle(!expanded)}
+                  className="text-xs px-2 py-1 rounded bg-slate-100 hover:bg-slate-200 text-slate-600"
+                >
+                  {expanded ? 'Less' : 'More'}
+                </button>
+                {onInsert && (
+                  <button
+                    onClick={() => onInsert(entry.head)}
+                    className="text-xs px-2 py-1 rounded bg-indigo-100 hover:bg-indigo-200 text-indigo-700"
+                  >
+                    Insert
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+
+        // Main App Component
+        function App() {
+          // State management
+          const [dialect, setDialect] = useState("");
+          const [posFilter, setPosFilter] = useState("");
+          const [editor, setEditor] = useState("ⲁⲛⲟⲕ ⲡⲉ ⲣⲱⲙⲉ ⲛ̄ⲧⲙⲏⲧⲉ.\n");
+          const [expandedCards, setExpandedCards] = useState(new Set());
+          const [stats, setStats] = useState({ words: 0, chars: 0, lines: 1 });
+          const [fontSize, setFontSize] = useState('text-lg');
+          const [showKeyboard, setShowKeyboard] = useState(true);
+          const [activeKeyboardTab, setActiveKeyboardTab] = useState('main');
+          
+          // AI state
+          const [aiBusy, setAiBusy] = useState(false);
+          const [aiOut, setAiOut] = useState("");
+          const [aiError, setAiError] = useState("");
+          const [apiKey, setApiKey] = useState("");
+          const [apiKeyVisible, setApiKeyVisible] = useState(false);
+          
+          // History for undo/redo
+          const [history, dispatch] = useReducer(historyReducer, {
+            history: [editor],
+            index: 0
+          });
+          
+          // Refs
+          const editorRef = useRef(null);
+          const { query, setQuery, results, loading } = useLexiconSearch(dialect, posFilter);
+
+          // Update editor from history
+          useEffect(() => {
+            setEditor(history.history[history.index]);
+          }, [history]);
+
+          // Calculate stats when editor changes
+          useEffect(() => {
+            setStats(calculateStats(editor));
+          }, [editor]);
+
+          // Handle text change with history
+          const handleEditorChange = (newText) => {
+            setEditor(newText);
+            dispatch({ type: 'ADD', text: newText });
+          };
+
+          // Insert text at caret position
+          const insertAtCaret = useCallback((text) => {
+            const el = editorRef.current;
+            if (!el) return;
+            
+            const start = el.selectionStart;
+            const end = el.selectionEnd;
+            const newText = editor.slice(0, start) + text + editor.slice(end);
+            
+            handleEditorChange(newText);
+            
+            requestAnimationFrame(() => {
+              el.focus();
+              el.selectionStart = el.selectionEnd = start + text.length;
+            });
+          }, [editor]);
+
+          // Enhanced copy functionality
+          const [copied, setCopied] = useState(false);
+          const copyText = async (text = editor) => {
+            try {
+              await navigator.clipboard.writeText(text);
+              setCopied(true);
+              setTimeout(() => setCopied(false), 2000);
+            } catch (err) {
+              console.error('Failed to copy:', err);
+            }
+          };
+
+          // Export functions
+          const downloadFile = (content, filename, type = 'text/plain') => {
+            const blob = new Blob([content], { type: `${type};charset=utf-8` });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = filename;
+            a.click();
+            URL.revokeObjectURL(url);
+          };
+
+          const exportTxt = () => downloadFile(editor, 'coptic_text.txt');
+          
+          const exportHtml = () => {
+            const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Coptic Text</title>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Coptic&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Noto Sans Coptic', sans-serif; line-height: 1.6; padding: 2em; }
+        .coptic { font-size: 1.2em; }
+    </style>
+</head>
+<body>
+    <div class="coptic">${editor.replace(/\n/g, '<br>')}</div>
+</body>
+</html>`;
+            downloadFile(html, 'coptic_text.html', 'text/html');
+          };
+
+          // Enhanced AI functions
+          const runAI = async (action) => {
+            const selectedText = editorRef.current ? 
+              editorRef.current.value.substring(editorRef.current.selectionStart, editorRef.current.selectionEnd).trim() : '';
+            const textToAnalyze = selectedText || editor;
+
+            if (!textToAnalyze.trim()) {
+              setAiError("Please enter or select text to analyze.");
+              return;
+            }
+
+            if (!apiKey) {
+              setAiError("Please configure your Gemini API key first.");
+              return;
+            }
+
+            setAiBusy(true);
+            setAiOut("");
+            setAiError("");
+
+            const prompts = {
+              correct: `As an expert in Coptic linguistics, analyze this Coptic text for grammatical accuracy. Provide:
+1. The corrected text (if corrections needed)
+2. Detailed explanation of each correction
+3. Relevant grammatical rules
+
+Text: "${textToAnalyze}"`,
+              
+              translate: `Provide a scholarly translation of this Coptic text to English. Include:
+1. Literal translation
+2. Contextual/interpretive translation
+3. Notes on ambiguous terms or cultural context
+
+Text: "${textToAnalyze}"`,
+              
+              analyze: `Provide a comprehensive linguistic analysis of this Coptic text:
+1. Morphological breakdown
+2. Syntactic structure
+3. Dialectal features
+4. Historical/cultural context
+
+Text: "${textToAnalyze}"`,
+              
+              continue: `As a Coptic scribe, continue this text in authentic style, maintaining:
+1. Consistent grammar and vocabulary
+2. Appropriate register and dialect
+3. Historical authenticity
+
+Text: "${textToAnalyze}"`,
+              
+              etymology: `Trace the etymological origins of key terms in this Coptic text:
+1. Egyptian hieroglyphic antecedents
+2. Demotic intermediates
+3. Greek loanwords (if any)
+4. Semantic evolution
+
+Text: "${textToAnalyze}"`,
+            };
+
+            try {
+              const { answer } = await callGeminiApi({ 
+                instruction: prompts[action], 
+                apiKey 
+              });
+              setAiOut(answer);
+            } catch (error) {
+              console.error('AI Error:', error);
+              setAiError(error.message || 'Failed to get AI response');
+            } finally {
+              setAiBusy(false);
+            }
+          };
+
+          // Keyboard shortcuts
+          useEffect(() => {
+            const handleKeyDown = (e) => {
+              if (e.ctrlKey || e.metaKey) {
+                switch(e.key) {
+                  case 'z':
+                    if (e.shiftKey) {
+                      e.preventDefault();
+                      dispatch({ type: 'REDO' });
+                    } else {
+                      e.preventDefault();
+                      dispatch({ type: 'UNDO' });
+                    }
+                    break;
+                  case 's':
+                    e.preventDefault();
+                    exportTxt();
+                    break;
+                  case 'b':
+                    e.preventDefault();
+                    const selection = window.getSelection().toString();
+                    if (selection) insertAtCaret(`*${selection}*`);
+                    break;
+                }
+              }
+            };
+
+            window.addEventListener('keydown', handleKeyDown);
+            return () => window.removeEventListener('keydown', handleKeyDown);
+          }, [editor]);
+
+          return (
+            <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 flex flex-col">
+              {/* Enhanced Header */}
+              <header className="bg-white border-b border-slate-200 shadow-sm sticky top-0 z-20">
+                <div className="px-4 py-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-indigo-500 to-indigo-700 text-white grid place-items-center font-bold text-xl font-coptic shadow-md">
+                        ϯ
+                      </div>
+                      <div>
+                        <h1 className="text-xl font-bold text-slate-900">Rem-en-khemi</h1>
+                        <p className="text-xs text-slate-600">Professional Coptic Composition Suite</p>
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center gap-2">
+                      <div className="text-xs text-slate-500 mr-3">
+                        {stats.words} words · {stats.chars} chars · {stats.lines} lines
+                      </div>
+                      <button
+                        onClick={() => dispatch({ type: 'UNDO' })}
+                        disabled={history.index === 0}
+                        className="px-3 py-1.5 text-sm rounded border border-slate-300 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                        title="Undo (Ctrl+Z)"
+                      >
+                        ↶ Undo
+                      </button>
+                      <button
+                        onClick={() => dispatch({ type: 'REDO' })}
+                        disabled={history.index === history.history.length - 1}
+                        className="px-3 py-1.5 text-sm rounded border border-slate-300 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                        title="Redo (Ctrl+Shift+Z)"
+                      >
+                        ↷ Redo
+                      </button>
+                      <button
+                        onClick={() => copyText()}
+                        className={`px-3 py-1.5 text-sm rounded border transition-colors ${
+                          copied ? 'bg-green-500 text-white border-green-500' : 'border-slate-300 hover:bg-slate-50'
+                        }`}
+                      >
+                        {copied ? '✓ Copied' : '📋 Copy'}
+                      </button>
+                      <div className="relative group">
+                        <button className="px-3 py-1.5 text-sm rounded border border-slate-300 hover:bg-slate-50">
+                          Export ▾
+                        </button>
+                        <div className="absolute right-0 mt-1 w-40 bg-white border rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all">
+                          <button onClick={exportTxt} className="block w-full text-left px-3 py-2 text-sm hover:bg-slate-50">
+                            📄 Plain Text (.txt)
+                          </button>
+                          <button onClick={exportHtml} className="block w-full text-left px-3 py-2 text-sm hover:bg-slate-50">
+                            🌐 HTML Document
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </header>
+
+              {/* Main Content Area */}
+              <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-4 p-4 max-w-[1920px] mx-auto w-full">
+                
+                {/* Dictionary Panel */}
+                <aside className="lg:col-span-3 xl:col-span-3">
+                  <div className="bg-white rounded-xl border border-slate-200 shadow-sm h-full flex flex-col">
+                    <div className="p-4 border-b border-slate-200">
+                      <h2 className="font-bold text-lg mb-3">Lexicon Search</h2>
+                      
+                      <input
+                        value={query}
+                        onChange={(e) => setQuery(e.target.value)}
+                        placeholder="Search Coptic terms..."
+                        className="w-full px-3 py-2 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-coptic"
+                      />
+                      
+                      <div className="mt-3 space-y-2">
+                        <div>
+                          <label className="text-xs text-slate-600 font-medium">Dialect Filter:</label>
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            {[
+                              { code: "", label: "All" },
+                              { code: "S", label: "S" },
+                              { code: "B", label: "B" },
+                              { code: "A", label: "A" },
+                              { code: "L", label: "L" },
+                              { code: "F", label: "F" },
+                            ].map(d => (
+                              <button
+                                key={d.code}
+                                onClick={() => setDialect(d.code)}
+                                className={`px-2 py-1 text-xs rounded ${
+                                  dialect === d.code 
+                                    ? 'bg-indigo-600 text-white' 
+                                    : 'bg-slate-100 hover:bg-slate-200'
+                                }`}
+                              >
+                                {d.label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                        
+                        <div>
+                          <label className="text-xs text-slate-600 font-medium">Part of Speech:</label>
+                          <select
+                            value={posFilter}
+                            onChange={(e) => setPosFilter(e.target.value)}
+                            className="w-full mt-1 px-2 py-1 text-sm rounded border border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                          >
+                            <option value="">All</option>
+                            <option value="N">Noun</option>
+                            <option value="V">Verb</option>
+                            <option value="DET">Determiner</option>
+                            <option value="ADJ">Adjective</option>
+                            <option value="PREP">Preposition</option>
+                          </select>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div className="flex-1 overflow-y-auto custom-scrollbar p-4">
+                      {loading && (
+                        <div className="text-center py-4">
+                          <div className="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-600"></div>
+                        </div>
+                      )}
+                      
+                      {!loading && results.length === 0 && query && (
+                        <p className="text-sm text-slate-500 text-center py-4">
+                          No results found for "{query}"
+                        </p>
+                      )}
+                      
+                      {!loading && results.map(entry => (
+                        <LexCard
+                          key={entry.id}
+                          entry={entry}
+                          expanded={expandedCards.has(entry.id)}
+                          onToggle={(expanded) => {
+                            const newExpanded = new Set(expandedCards);
+                            if (expanded) {
+                              newExpanded.add(entry.id);
+                            } else {
+                              newExpanded.delete(entry.id);
+                            }
+                            setExpandedCards(newExpanded);
+                          }}
+                          onInsert={(text) => insertAtCaret(text + " ")}
+                        />
+                      ))}
+                      
+                      {!query && (
+                        <div className="text-sm text-slate-500 text-center py-8">
+                          <p className="mb-2">Enter a search term above</p>
+                          <p className="text-xs">Demo includes 5 entries</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </aside>
+
+                {/* Editor Panel */}
+                <main className="lg:col-span-6">
+                  <div className="bg-white rounded-xl border border-slate-200 shadow-sm h-full flex flex-col">
+                    <div className="p-4 border-b border-slate-200">
+                      <div className="flex items-center justify-between">
+                        <h2 className="font-bold text-lg">Text Editor</h2>
+                        <div className="flex items-center gap-2">
+                          <label className="text-xs text-slate-600">Font Size:</label>
+                          <select
+                            value={fontSize}
+                            onChange={(e) => setFontSize(e.target.value)}
+                            className="px-2 py-1 text-xs rounded border border-slate-300"
+                          >
+                            <option value="text-base">Normal</option>
+                            <option value="text-lg">Large</option>
+                            <option value="text-xl">X-Large</option>
+                            <option value="text-2xl">XX-Large</option>
+                          </select>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div className="flex-1 p-4">
+                      <textarea
+                        ref={editorRef}
+                        value={editor}
+                        onChange={(e) => handleEditorChange(e.target.value)}
+                        className={`w-full h-full resize-none rounded-lg border border-slate-300 p-4 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-coptic ${fontSize} leading-relaxed custom-scrollbar`}
+                        placeholder="Enter your Coptic text here..."
+                        spellCheck="false"
+                      />
+                    </div>
+                    
+                    {/* On-screen Keyboard */}
+                    <div className="border-t border-slate-200 p-4">
+                      <div className="flex items-center justify-between mb-2">
+                        <h3 className="text-sm font-semibold">Virtual Keyboard</h3>
+                        <button
+                          onClick={() => setShowKeyboard(!showKeyboard)}
+                          className="text-xs px-2 py-1 rounded bg-slate-100 hover:bg-slate-200"
+                        >
+                          {showKeyboard ? 'Hide' : 'Show'}
+                        </button>
+                      </div>
+                      
+                      {showKeyboard && (
+                        <div>
+                          <div className="flex gap-1 mb-2">
+                            {Object.keys(COPTIC_KEYBOARD).map(tab => (
+                              <button
+                                key={tab}
+                                onClick={() => setActiveKeyboardTab(tab)}
+                                className={`px-3 py-1 text-xs rounded capitalize ${
+                                  activeKeyboardTab === tab
+                                    ? 'bg-indigo-600 text-white'
+                                    : 'bg-slate-100 hover:bg-slate-200'
+                                }`}
+                              >
+                                {tab}
+                              </button>
+                            ))}
+                          </div>
+                          
+                          <div className="flex flex-wrap gap-1">
+                            {COPTIC_KEYBOARD[activeKeyboardTab].map(char => (
+                              <button
+                                key={char}
+                                onClick={() => insertAtCaret(char)}
+                                className="px-3 py-2 rounded bg-slate-100 hover:bg-slate-200 font-coptic text-lg transition-colors"
+                              >
+                                {char}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </main>
+
+                {/* AI Assistant Panel */}
+                <section className="lg:col-span-3">
+                  <div className="bg-white rounded-xl border border-slate-200 shadow-sm h-full flex flex-col">
+                    <div className="p-4 border-b border-slate-200">
+                      <h2 className="font-bold text-lg mb-2">AI Assistant</h2>
+                      <ApiConfig 
+                        apiKey={apiKey}
+                        setApiKey={setApiKey}
+                        isVisible={apiKeyVisible}
+                        setIsVisible={setApiKeyVisible}
+                      />
+                    </div>
+                    
+                    <div className="p-4 space-y-2">
+                      <p className="text-xs text-slate-600 mb-3">
+                        Select text or analyze entire document:
+                      </p>
+                      
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          onClick={() => runAI('correct')}
+                          disabled={aiBusy || !apiKey}
+                          className="py-2 px-3 text-sm rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:bg-slate-300 disabled:cursor-not-allowed transition-colors"
+                        >
+                          Grammar Check
+                        </button>
+                        <button
+                          onClick={() => runAI('translate')}
+                          disabled={aiBusy || !apiKey}
+                          className="py-2 px-3 text-sm rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 disabled:bg-slate-300 disabled:cursor-not-allowed transition-colors"
+                        >
+                          Translate
+                        </button>
+                        <button
+                          onClick={() => runAI('analyze')}
+                          disabled={aiBusy || !apiKey}
+                          className="py-2 px-3 text-sm rounded-lg bg-purple-600 text-white hover:bg-purple-700 disabled:bg-slate-300 disabled:cursor-not-allowed transition-colors"
+                        >
+                          Analyze
+                        </button>
+                        <button
+                          onClick={() => runAI('continue')}
+                          disabled={aiBusy || !apiKey}
+                          className="py-2 px-3 text-sm rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:bg-slate-300 disabled:cursor-not-allowed transition-colors"
+                        >
+                          Continue
+                        </button>
+                        <button
+                          onClick={() => runAI('etymology')}
+                          disabled={aiBusy || !apiKey}
+                          className="py-2 px-3 text-sm rounded-lg bg-amber-600 text-white hover:bg-amber-700 disabled:bg-slate-300 disabled:cursor-not-allowed transition-colors col-span-2"
+                        >
+                          Etymology Analysis
+                        </button>
+                      </div>
+                    </div>
+                    
+                    <div className="flex-1 p-4 overflow-hidden flex flex-col">
+                      <div className="flex items-center justify-between mb-2">
+                        <label className="text-sm font-semibold text-slate-700">AI Response</label>
+                        {aiOut && (
+                          <button
+                            onClick={() => copyText(aiOut)}
+                            className="text-xs px-2 py-1 rounded bg-slate-100 hover:bg-slate-200"
+                          >
+                            Copy
+                          </button>
+                        )}
+                      </div>
+                      
+                      <div className="flex-1 relative">
+                        <div className={`h-full overflow-y-auto custom-scrollbar bg-slate-50 rounded-lg border border-slate-200 p-4 ${aiBusy ? 'pulse-loading' : ''}`}>
+                          {aiBusy && (
+                            <div className="flex items-center justify-center h-full">
+                              <div className="text-center">
+                                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mx-auto mb-2"></div>
+                                <p className="text-sm text-slate-600">Processing...</p>
+                              </div>
+                            </div>
+                          )}
+                          
+                          {!aiBusy && aiError && (
+                            <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+                              <p className="text-sm text-red-700">{aiError}</p>
+                            </div>
+                          )}
+                          
+                          {!aiBusy && !aiError && aiOut && (
+                            <div className="whitespace-pre-wrap text-sm text-slate-700 leading-relaxed">
+                              {aiOut}
+                            </div>
+                          )}
+                          
+                          {!aiBusy && !aiError && !aiOut && (
+                            <p className="text-sm text-slate-500 text-center">
+                              AI responses will appear here
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </section>
+              </div>
+
+              {/* Footer */}
+              <footer className="bg-white border-t border-slate-200 px-4 py-3">
+                <div className="flex items-center justify-between text-xs text-slate-600">
+                  <div>
+                    © {new Date().getFullYear()} Rem-en-khemi · Professional Coptic Composition Suite
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <span>Keyboard Shortcuts: Ctrl+Z (Undo) · Ctrl+Shift+Z (Redo) · Ctrl+S (Save)</span>
+                    <span>Powered by Gemini AI</span>
+                  </div>
+                </div>
+              </footer>
+            </div>
+          );
+        }
+
+        // Mount the application
+        const container = document.getElementById('root');
+        const root = ReactDOM.createRoot(container);
+        root.render(<App />);
+    </script>
+</body>
+</html>
